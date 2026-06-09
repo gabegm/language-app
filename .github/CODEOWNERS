@@ -1,0 +1,14 @@
+# Language Challenge - Code Ownership
+# This file defines ownership for review responsibilities.
+
+# Core application
+* @gabegm
+
+# Language decks
+src/data/* @gabegm
+
+# Engine (daily challenge generation)
+src/engine/ @gabegm
+
+# Tests
+src/**/*.test.{ts,tsx} @gabegm
