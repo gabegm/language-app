@@ -18,5 +18,14 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Custom hooks are exported alongside components — expected pattern
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowExport: '1', allowImport: '0', ignoreSourceModule: false },
+      ],
+      // Exhaustive deps: we intentionally omit some deps (e.g. challenge in DailyChallenge)
+      'react-hooks/exhaustive-deps': 'warn',
+    },
   },
 ])
