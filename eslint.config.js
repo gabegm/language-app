@@ -20,12 +20,15 @@ export default defineConfig([
     },
     rules: {
       // Custom hooks are exported alongside components — expected pattern
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowExport: '1', allowImport: '0', ignoreSourceModule: false },
-      ],
+      'react-refresh/only-export-components': 'warn',
       // Exhaustive deps: we intentionally omit some deps (e.g. challenge in DailyChallenge)
       'react-hooks/exhaustive-deps': 'warn',
+      // Allow impure hooks (randomness in game logic)
+      'react-hooks/purity': 'warn',
+      // Data fetching / initialization in useEffect is intentional here
+      'react-hooks/set-state-in-effect': 'warn',
+      // Allow unused assignments in game logic
+      'no-useless-assignment': 'warn',
     },
   },
 ])
