@@ -7,38 +7,57 @@ interface MatchingProps {
   onNext?: () => void;
   words?: Word[];
   allowRetry?: boolean;
+  stripPunctuation?: (word: string) => string;
+  /** Maximum number of pairs to show (default: 5). Set to 1 for single-word matching. */
+  maxPairs?: number;
 }
 
-export default function Matching({ content, onResult, onNext, words, allowRetry = true }: MatchingProps) {
-  const word = content as Word;
+export default function Matching({ content, onResult, onNext, words, allowRetry = true, maxPairs = 5 }: MatchingProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [matchedPairs, setMatchedPairs] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [attempts, setAttempts] = useState(0);
 
-  // Build 4 pairs: the passed content is always included (anchor), fill rest from words
-  const pairs = useMemo(() => {
-    if (!words || words.length < 4) {
-      return [{ id: word.id, targetWord: word.targetWord, translation: word.translation }];
+  // Resolve the anchor word: if content is a Sentence, look up its corresponding Word from words
+  const anchorWord = useMemo(() => {
+    if ('targetWord' in content) {
+      return content as Word;
     }
+    // Content is a Sentence — find a Word that matches by contentId === sentence.id
+    if (words) {
+      const matchingWord = words.find((w) => w.id === (content as Sentence).id);
+      if (matchingWord) return matchingWord;
+    }
+    // Fallback: use the sentence's targetSentence as targetWord and translation as translation
+    return {
+      id: content.id,
+      targetWord: (content as Sentence).targetSentence,
+      translation: (content as Sentence).translation,
+    } as Word;
+  }, [content, words]);
 
-    const otherWords = words.filter((w) => w.id !== word.id);
+  // Build pairs: the passed content is always included (anchor), fill rest from words
+  // Cap total pairs to maxPairs (default 5) to avoid overwhelming the user
+  const pairs = useMemo(() => {
+    const otherWords = words ? words.filter((w) => w.id !== anchorWord.id) : [];
     const shuffled = [...otherWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    const selectedWords = shuffled.slice(0, 3);
+    // Cap distractors so total pairs <= maxPairs
+    const maxDistractors = Math.max(0, maxPairs - 1);
+    const selectedWords = shuffled.slice(0, maxDistractors);
 
     return [
-      { id: word.id, targetWord: word.targetWord, translation: word.translation },
+      { id: anchorWord.id, targetWord: anchorWord.targetWord, translation: anchorWord.translation },
       ...selectedWords.map((w) => ({
         id: w.id,
         targetWord: w.targetWord,
         translation: w.translation,
       })),
     ];
-  }, [word, words]);
+  }, [anchorWord, words, maxPairs]);
 
   const { leftItems, rightItems } = useMemo(() => {
     const shuffledPairs = [...pairs];
@@ -172,7 +191,23 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
       ) : (
         <div style={styles.feedback}>
           {feedback === 'correct' ? (
-            <span style={styles.correct}>✓ All matched!</span>
+            <>
+              <span style={styles.correct}>✓ All matched!</span>
+              <div style={styles.pairList}>
+                {leftItems
+                  .filter((item) => matchedPairs.has(item.id))
+                  .map((leftItem) => {
+                    const rightItem = rightItems.find((r) => r.pairId === leftItem.pairId);
+                    return rightItem ? (
+                      <div key={leftItem.pairId} style={styles.pairRow}>
+                        <span style={styles.pairWord}>{leftItem.text}</span>
+                        <span style={styles.pairArrow}>→</span>
+                        <span style={styles.pairTranslation}>{rightItem.text}</span>
+                      </div>
+                    ) : null;
+                  })}
+              </div>
+            </>
           ) : (
             <span style={styles.incorrect}>✗ Try again</span>
           )}
@@ -254,6 +289,35 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#dc2626',
     fontSize: 14,
   },
+  pairList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: 8,
+    padding: '8px 12px',
+    background: '#f0fdf4',
+    borderRadius: 6,
+    border: '1px solid #2d6a4f',
+  },
+  pairRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    fontSize: 14,
+  },
+  pairWord: {
+    fontWeight: 600,
+    color: '#1a1a1a',
+  },
+  pairArrow: {
+    color: '#2d6a4f',
+    fontWeight: 700,
+  },
+  pairTranslation: {
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
   retryButton: {
     padding: '8px 16px',
     fontSize: 14,
@@ -261,6 +325,17 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #d1d5db',
     borderRadius: 6,
     cursor: 'pointer',
+  },
+  button: {
+    padding: '12px 24px',
+    fontSize: 16,
+    fontWeight: 600,
+    background: '#2d6a4f',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    width: '100%',
   },
   nextButton: {
     padding: '12px 24px',

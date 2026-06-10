@@ -5,13 +5,14 @@ interface SentenceBuilderProps {
   content: Word | Sentence;
   onResult: (result: ExerciseResult) => void;
   onNext?: () => void;
+  words?: Word[];
   stripPunctuation?: (word: string) => string;
   allowRetry?: boolean;
 }
 
-export default function SentenceBuilder({ content, onResult, onNext, stripPunctuation, allowRetry = true }: SentenceBuilderProps) {
+export default function SentenceBuilder({ content, onResult, onNext, words, stripPunctuation, allowRetry = true }: SentenceBuilderProps) {
   const sentence = content as Sentence;
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [attempts, setAttempts] = useState(0);
 
@@ -19,24 +20,42 @@ export default function SentenceBuilder({ content, onResult, onNext, stripPunctu
     stripPunctuation ? stripPunctuation(w) : w
   );
 
+  // Generate distractor words from the words array
+  const distractorWords = useMemo(() => {
+    if (!words || words.length === 0) return [];
+    const sentenceWords = new Set(targetWords);
+    const candidates = words
+      .map((w) => stripPunctuation ? stripPunctuation(w.targetWord) : w.targetWord)
+      .filter((w) => !sentenceWords.has(w));
+    const shuffled = [...candidates];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Add up to 3 distractor words
+    return shuffled.slice(0, Math.min(3, shuffled.length));
+  }, [words, targetWords, stripPunctuation]);
+
   const scrambled = useMemo(() => {
-    const shuffled = [...targetWords];
+    // Combine correct words with distractors, then shuffle
+    const allWords = [...targetWords, ...distractorWords];
+    const shuffled = [...allWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
-  }, [targetWords]);
+  }, [targetWords, distractorWords]);
 
   const handleSelect = useCallback(
-    (word: string) => {
+    (index: number) => {
       if (feedback) return;
 
-      setSelected((prev) => {
-        if (prev.includes(word)) {
-          return prev.filter((w) => w !== word);
+      setSelectedIndices((prev) => {
+        if (prev.includes(index)) {
+          return prev.filter((i) => i !== index);
         }
-        return [...prev, word];
+        return [...prev, index];
       });
     },
     [feedback]
@@ -48,7 +67,8 @@ export default function SentenceBuilder({ content, onResult, onNext, stripPunctu
     const currentAttempts = attempts;
     setAttempts((prev) => prev + 1);
 
-    const isCorrect = selected.join(' ') === targetWords.join(' ');
+    const selectedWords = selectedIndices.map((idx) => scrambled[idx]);
+    const isCorrect = selectedWords.join(' ') === targetWords.join(' ');
 
     if (isCorrect) {
       setFeedback('correct');
@@ -67,10 +87,10 @@ export default function SentenceBuilder({ content, onResult, onNext, stripPunctu
         timestamp: new Date().toISOString(),
       });
     }
-  }, [feedback, selected, sentence.targetSentence, content.id, onResult, attempts]);
+  }, [feedback, selectedIndices, sentence.targetSentence, content.id, onResult, attempts]);
 
   const handleReset = useCallback(() => {
-    setSelected([]);
+    setSelectedIndices([]);
     setFeedback(null);
     setAttempts(0);
   }, []);
@@ -80,18 +100,18 @@ export default function SentenceBuilder({ content, onResult, onNext, stripPunctu
       <p style={styles.instruction}>Arrange the words to form the correct sentence:</p>
 
       <div style={styles.answerArea}>
-        {selected.length === 0 ? (
+        {selectedIndices.length === 0 ? (
           <p style={styles.placeholder}>Tap words below to build your sentence...</p>
         ) : (
           <div style={styles.wordsRow}>
-            {selected.map((word, i) => (
+            {selectedIndices.map((idx) => (
               <button
-                key={`${word}-${i}`}
+                key={idx}
                 style={styles.wordChip}
-                onClick={() => handleSelect(word)}
+                onClick={() => handleSelect(idx)}
                 disabled={!!feedback}
               >
-                {word}
+                {scrambled[idx]}
               </button>
             ))}
           </div>
@@ -99,23 +119,22 @@ export default function SentenceBuilder({ content, onResult, onNext, stripPunctu
       </div>
 
       <div style={styles.sourceArea}>
-        {scrambled.map((word, i) => (
-          <button
-            key={`${word}-${i}`}
-            style={{
-              ...styles.wordChip,
-              ...(selected.includes(word) ? styles.wordChipDisabled : {}),
-            }}
-            onClick={() => handleSelect(word)}
-            disabled={!!feedback || selected.includes(word)}
-          >
-            {word}
-          </button>
-        ))}
+        {scrambled.map((word, i) =>
+          selectedIndices.includes(i) ? null : (
+            <button
+              key={i}
+              style={styles.wordChip}
+              onClick={() => handleSelect(i)}
+              disabled={!!feedback}
+            >
+              {word}
+            </button>
+          )
+        )}
       </div>
 
       {!feedback ? (
-        <button style={styles.button} onClick={handleSubmit} disabled={selected.length === 0}>
+        <button style={styles.button} onClick={handleSubmit} disabled={selectedIndices.length === 0}>
           Check
         </button>
       ) : (
@@ -187,10 +206,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'opacity 0.2s',
   },
-  wordChipDisabled: {
-    opacity: 0.4,
-    cursor: 'default',
-  },
+
   button: {
     padding: '12px 24px',
     fontSize: 16,

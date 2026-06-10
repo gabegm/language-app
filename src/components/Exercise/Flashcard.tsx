@@ -108,7 +108,9 @@ export default function Flashcard({ content, onResult, onNext, words, allowRetry
             ) : (
               <div style={styles.feedback}>
                 {feedback === 'correct' ? (
-                  <span style={styles.correct}>✓ Correct!</span>
+                  <span style={styles.correct}>
+                    ✓ Correct! Translation: <strong>{answer}</strong>
+                  </span>
                 ) : (
                   <span style={styles.incorrect}>
                     ✗ The answer was: <strong>{answer}</strong>
@@ -144,7 +146,9 @@ export default function Flashcard({ content, onResult, onNext, words, allowRetry
             ) : (
               <div style={styles.feedback}>
                 {feedback === 'correct' ? (
-                  <span style={styles.correct}>✓ Correct!</span>
+                  <span style={styles.correct}>
+                    ✓ Correct! Translation: <strong>{answer}</strong>
+                  </span>
                 ) : (
                   <span style={styles.incorrect}>
                     ✗ The answer was: <strong>{answer}</strong>

@@ -1,28 +1,47 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { Word, Sentence, ExerciseResult } from '@/types';
 
 interface FillBlankProps {
   content: Word | Sentence;
   onResult: (result: ExerciseResult) => void;
   onNext?: () => void;
+  words?: Word[];
+  stripPunctuation?: (word: string) => string;
   allowRetry?: boolean;
 }
 
-export default function FillBlank({ content, onResult, onNext, allowRetry = true }: FillBlankProps) {
+export default function FillBlank({ content, onResult, onNext, words, stripPunctuation, allowRetry = true }: FillBlankProps) {
   const sentence = content as Sentence;
   const [input, setInput] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [attempts, setAttempts] = useState(0);
 
-  const words = sentence.targetSentence.split(/\s+/);
-  const blankableWords = words.filter(
+  const sentenceWords = sentence.targetSentence.split(/\s+/).map((w) =>
+    stripPunctuation ? stripPunctuation(w) : w
+  );
+  const blankableWords = sentenceWords.filter(
     (w) => w.length > 2 && !/[.,!?;:"'()]/.test(w)
   );
-  const blankWord = blankableWords[0] || words[0];
+  const blankWord = blankableWords[0] || sentenceWords[0];
   const blankedSentence = sentence.targetSentence.replace(
     new RegExp(blankWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
     '_____'
   );
+
+  // Generate multiple-choice options
+  const options = useMemo(() => {
+    if (!words || words.length === 0) return null;
+    const wrongAnswers = words
+      .map((w) => stripPunctuation ? stripPunctuation(w.targetWord) : w.targetWord)
+      .filter((w) => !sentenceWords.includes(w) && w.toLowerCase() !== blankWord.toLowerCase())
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3);
+    const allOptions = [...wrongAnswers, blankWord].sort(() => Math.random() - 0.5);
+    return allOptions;
+  }, [words, sentenceWords, stripPunctuation, blankWord]);
+
+  const hasOptions = options !== null;
 
   const handleSubmit = useCallback(() => {
     if (feedback) return;
@@ -30,7 +49,13 @@ export default function FillBlank({ content, onResult, onNext, allowRetry = true
     const currentAttempts = attempts;
     setAttempts((prev) => prev + 1);
 
-    const isCorrect = input.trim().toLowerCase() === blankWord.toLowerCase();
+    let isCorrect = false;
+
+    if (hasOptions && selectedOption !== null) {
+      isCorrect = options![selectedOption].trim().toLowerCase() === blankWord.toLowerCase();
+    } else {
+      isCorrect = input.trim().toLowerCase() === blankWord.toLowerCase();
+    }
 
     if (isCorrect) {
       setFeedback('correct');
@@ -49,11 +74,12 @@ export default function FillBlank({ content, onResult, onNext, allowRetry = true
         timestamp: new Date().toISOString(),
       });
     }
-  }, [feedback, input, blankWord, content.id, onResult, attempts]);
+  }, [feedback, hasOptions, selectedOption, options, input, blankWord, content.id, onResult, attempts]);
 
   const handleRetry = useCallback(() => {
     setInput('');
     setFeedback(null);
+    setSelectedOption(null);
     setAttempts(0);
   }, []);
 
@@ -67,38 +93,85 @@ export default function FillBlank({ content, onResult, onNext, allowRetry = true
       </div>
 
       <div style={styles.inputArea}>
-        <input
-          style={styles.input}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !feedback && handleSubmit()}
-          placeholder="Type the missing word..."
-          disabled={!!feedback}
-        />
-        {!feedback ? (
-          <button style={styles.button} onClick={handleSubmit}>
-            Check
-          </button>
-        ) : (
-          <div style={styles.feedback}>
-            {feedback === 'correct' ? (
-              <span style={styles.correct}>✓ Correct! The word was "{blankWord}"</span>
+        {hasOptions ? (
+          <>
+            {options.map((option, i) => (
+              <button
+                key={i}
+                style={{
+                  ...styles.optionButton,
+                  ...(selectedOption === i ? styles.selectedOption : {}),
+                  ...(feedback === 'correct' && option === blankWord ? styles.correctOption : {}),
+                  ...(feedback === 'incorrect' && selectedOption === i && option !== blankWord ? styles.wrongOption : {}),
+                }}
+                onClick={() => setSelectedOption(i)}
+                disabled={!!feedback}
+              >
+                {option}
+              </button>
+            ))}
+            {!feedback ? (
+              <button style={styles.button} onClick={handleSubmit}>
+                Check
+              </button>
             ) : (
-              <span style={styles.incorrect}>
-                ✗ The missing word was: <strong>{blankWord}</strong>
-              </span>
+              <div style={styles.feedback}>
+                {feedback === 'correct' ? (
+                  <span style={styles.correct}>✓ Correct! The word was "{blankWord}"</span>
+                ) : (
+                  <span style={styles.incorrect}>
+                    ✗ The missing word was: <strong>{blankWord}</strong>
+                  </span>
+                )}
+                {allowRetry && feedback === 'incorrect' && (
+                  <button style={styles.retryButton} onClick={handleRetry}>
+                    Try Again
+                  </button>
+                )}
+                {!allowRetry && onNext && (
+                  <button style={styles.nextButton} onClick={onNext}>
+                    Next Question →
+                  </button>
+                )}
+              </div>
             )}
-            {allowRetry && feedback === 'incorrect' && (
-              <button style={styles.retryButton} onClick={handleRetry}>
-                Try Again
+          </>
+        ) : (
+          <>
+            <input
+              style={styles.input}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !feedback && handleSubmit()}
+              placeholder="Type the missing word..."
+              disabled={!!feedback}
+            />
+            {!feedback ? (
+              <button style={styles.button} onClick={handleSubmit}>
+                Check
               </button>
+            ) : (
+              <div style={styles.feedback}>
+                {feedback === 'correct' ? (
+                  <span style={styles.correct}>✓ Correct! The word was "{blankWord}"</span>
+                ) : (
+                  <span style={styles.incorrect}>
+                    ✗ The missing word was: <strong>{blankWord}</strong>
+                  </span>
+                )}
+                {allowRetry && feedback === 'incorrect' && (
+                  <button style={styles.retryButton} onClick={handleRetry}>
+                    Try Again
+                  </button>
+                )}
+                {!allowRetry && onNext && (
+                  <button style={styles.nextButton} onClick={onNext}>
+                    Next Question →
+                  </button>
+                )}
+              </div>
             )}
-            {!allowRetry && onNext && (
-              <button style={styles.nextButton} onClick={onNext}>
-                Next Question →
-              </button>
-            )}
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -145,6 +218,30 @@ const styles: Record<string, React.CSSProperties> = {
     border: '2px solid #d1d5db',
     borderRadius: 8,
     outline: 'none',
+  },
+  optionButton: {
+    padding: '12px 16px',
+    fontSize: 15,
+    background: '#f0fdf4',
+    border: '2px solid #2d6a4f',
+    borderRadius: 8,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+    transition: 'all 0.2s',
+  },
+  selectedOption: {
+    background: '#d1fae5',
+    border: '2px solid #059669',
+  },
+  correctOption: {
+    background: '#2d6a4f',
+    color: '#fff',
+    border: '2px solid #1b4332',
+  },
+  wrongOption: {
+    background: '#fee2e2',
+    border: '2px solid #dc2626',
   },
   button: {
     padding: '12px 24px',

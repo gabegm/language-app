@@ -139,6 +139,42 @@ export default function DailyChallenge() {
           </span>
         </div>
 
+        {/* Detailed breakdown */}
+        <div style={styles.breakdown}>
+          <h3 style={styles.breakdownTitle}>Question Breakdown</h3>
+          {challenge.questions.map((q, i) => {
+            const result = results[i];
+            const content = contentMap.get(q.contentId);
+            const isCorrect = result?.correct ?? false;
+            const isWord = content && 'targetWord' in content;
+            const target = isWord
+              ? (content as Word).targetWord
+              : (content as Sentence).targetSentence;
+            const translation = isWord
+              ? (content as Word).translation
+              : (content as Sentence).translation;
+
+            return (
+              <div
+                key={q.contentId}
+                style={{
+                  ...styles.breakdownItem,
+                  borderLeft: isCorrect ? '4px solid #2d6a4f' : '4px solid #dc2626',
+                }}
+              >
+                <span style={styles.breakdownIcon}>
+                  {isCorrect ? '✓' : '✗'}
+                </span>
+                <span style={styles.breakdownTarget}>{target}</span>
+                <span style={styles.breakdownTranslation}>({translation})</span>
+                <span style={styles.breakdownType}>
+                  [{q.exerciseType}]
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
         <button style={styles.shareButton} onClick={handleCopy}>
           📋 Copy to Share
         </button>
@@ -176,7 +212,8 @@ export default function DailyChallenge() {
           wordList,
           stripPunctuation,
           handleNext,
-          false // allowRetry = false for daily challenge
+          false, // allowRetry = false for daily challenge
+          currentQ.exerciseType === 'matching' ? 5 : undefined // cap matching to 5 pairs
         )}
       </div>
     </div>
@@ -213,6 +250,46 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stat: {
     fontWeight: 600,
+  },
+  breakdown: {
+    textAlign: 'left',
+    marginBottom: 20,
+  },
+  breakdownTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: '#1a1a1a',
+    marginBottom: 12,
+    marginTop: 0,
+  },
+  breakdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 12px',
+    marginBottom: 8,
+    background: '#f9fafb',
+    borderRadius: 6,
+    fontSize: 14,
+  },
+  breakdownIcon: {
+    fontSize: 16,
+    fontWeight: 700,
+    width: 20,
+    textAlign: 'center',
+  },
+  breakdownTarget: {
+    fontWeight: 600,
+    color: '#1a1a1a',
+  },
+  breakdownTranslation: {
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  breakdownType: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginLeft: 'auto',
   },
   shareButton: {
     padding: '14px 24px',

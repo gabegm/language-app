@@ -11,9 +11,10 @@ export function renderExercise(
   words?: Word[],
   stripPunctuation?: (word: string) => string,
   onNext?: () => void,
-  allowRetry?: boolean
+  allowRetry?: boolean,
+  maxPairs?: number
 ): React.ReactNode {
-  const props = { content, onResult, words, stripPunctuation, onNext, allowRetry };
+  const props = { content, onResult, words, stripPunctuation, onNext, allowRetry, maxPairs };
   switch (type) {
     case 'flashcard':
       return <Flashcard {...props} />;
