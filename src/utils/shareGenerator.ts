@@ -41,6 +41,10 @@ export function generateEmojiGrid(result: DailyChallengeResult): string {
   return grid;
 }
 
+export function generateEmojiGridFromResults(results: boolean[]): string {
+  return results.map((correct) => correct ? EMOJI_CORRECT : EMOJI_WRONG).join('');
+}
+
 /**
  * Copy emoji grid to clipboard and return success status.
  */

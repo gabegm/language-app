@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateEmojiGrid, parseEmojiGrid } from './shareGenerator';
+import { generateEmojiGrid, generateEmojiGridFromResults, parseEmojiGrid } from './shareGenerator';
 
 describe('generateEmojiGrid', () => {
   it('generates all green for perfect score', () => {
@@ -60,5 +60,11 @@ describe('parseEmojiGrid', () => {
 
   it('handles empty string', () => {
     expect(parseEmojiGrid('')).toEqual([]);
+  });
+});
+
+describe('generateEmojiGridFromResults', () => {
+  it('preserves the order of wrong answers', () => {
+    expect(generateEmojiGridFromResults([true, true, false, true, true, true])).toBe('🟩🟩⬜🟩🟩🟩');
   });
 });

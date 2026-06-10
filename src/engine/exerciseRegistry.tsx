@@ -3,6 +3,8 @@ import Flashcard from '@/components/Exercise/Flashcard';
 import SentenceBuilder from '@/components/Exercise/SentenceBuilder';
 import Matching from '@/components/Exercise/Matching';
 import FillBlank from '@/components/Exercise/FillBlank';
+import ArticleSelection from '@/components/Exercise/ArticleSelection';
+import ReverseFlashcard from '@/components/Exercise/ReverseFlashcard';
 
 export function renderExercise(
   type: string,
@@ -24,6 +26,10 @@ export function renderExercise(
       return <Matching {...props} />;
     case 'fillBlank':
       return <FillBlank {...props} />;
+    case 'articleSelection':
+      return <ArticleSelection {...props} />;
+    case 'reverseFlashcard':
+      return <ReverseFlashcard {...props} />;
     default:
       return <p>Unknown exercise type: {type}</p>;
   }

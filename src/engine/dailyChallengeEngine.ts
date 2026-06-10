@@ -42,6 +42,13 @@ function fisherYatesShuffle<T>(arr: T[], rng: () => number): T[] {
   return result;
 }
 
+const WORD_EXERCISE_TYPES: Exercise['type'][] = ['flashcard', 'matching', 'articleSelection', 'reverseFlashcard'];
+const SENTENCE_EXERCISE_TYPES: Exercise['type'][] = ['sentenceBuilder', 'fillBlank'];
+
+function getCompatibleExerciseTypes(contentType: 'word' | 'sentence'): Exercise['type'][] {
+  return contentType === 'word' ? WORD_EXERCISE_TYPES : SENTENCE_EXERCISE_TYPES;
+}
+
 /**
  * Generate a daily challenge for a given date.
  * Uses a deterministic algorithm so everyone gets the same challenge on the same date.
@@ -64,18 +71,19 @@ export function generateDailyChallenge(
   // Shuffle deterministically using Fisher-Yates
   const shuffled = fisherYatesShuffle(allContent, rng);
 
-  // Pick 4-6 questions (use day-of-year to vary count)
+  // Pick 8-10 questions (use day-of-year to vary count)
   const dayOfYear = getDayOfYear(date);
-  const questionCount = 4 + (dayOfYear % 3); // 4, 5, or 6
+  const questionCount = 8 + (dayOfYear % 3); // 8, 9, or 10
 
   const selected = shuffled.slice(0, questionCount);
 
-  // Build questions with random exercise types
-  const availableTypes: Exercise['type'][] = ['flashcard', 'sentenceBuilder', 'matching', 'fillBlank'];
-
-  const questions = selected.map(({ content }) => {
+  const questions = selected.map(({ type, content }) => {
     const contentId = content.id;
-    const matchingExercise = exercises.find((e) => e.contentId === contentId);
+    const availableTypes = getCompatibleExerciseTypes(type);
+    const matchingExercises = exercises.filter(
+      (e) => e.contentId === contentId && availableTypes.includes(e.type)
+    );
+    const matchingExercise = matchingExercises[Math.floor(rng() * matchingExercises.length)];
 
     return {
       exerciseType: matchingExercise?.type || availableTypes[Math.floor(rng() * availableTypes.length)],

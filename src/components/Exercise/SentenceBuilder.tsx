@@ -10,21 +10,50 @@ interface SentenceBuilderProps {
   allowRetry?: boolean;
 }
 
+function normalizeWord(word: string): string {
+  return word.toLocaleLowerCase('de-DE');
+}
+
+function isValidSentenceSelection(selectedWords: string[], targetWords: string[], words?: Word[]): boolean {
+  if (selectedWords.length !== targetWords.length) return false;
+
+  const exactMatch = selectedWords.every((word, index) => normalizeWord(word) === normalizeWord(targetWords[index]));
+  if (exactMatch) return true;
+
+  const wordByTarget = new Map((words ?? []).map((word) => [normalizeWord(word.targetWord), word]));
+
+  return selectedWords.every((word, index) => {
+    const targetWord = targetWords[index];
+    if (normalizeWord(word) === normalizeWord(targetWord)) return true;
+
+    const selectedEntry = wordByTarget.get(normalizeWord(word));
+    const targetEntry = wordByTarget.get(normalizeWord(targetWord));
+
+    return Boolean(
+      selectedEntry?.gender &&
+      targetEntry?.gender &&
+      selectedEntry.gender === targetEntry.gender
+    );
+  });
+}
+
 export default function SentenceBuilder({ content, onResult, onNext, words, stripPunctuation, allowRetry = true }: SentenceBuilderProps) {
   const sentence = content as Sentence;
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [attempts, setAttempts] = useState(0);
 
-  const targetWords = sentence.targetSentence.split(/\s+/).map((w) =>
-    stripPunctuation ? stripPunctuation(w) : w
+  const targetWords = useMemo(
+    () =>
+      sentence.targetSentence.split(/\s+/).map((w) =>
+        stripPunctuation ? stripPunctuation(w) : w
+      ),
+    [sentence.targetSentence, stripPunctuation]
   );
 
-  // Generate distractor words from the words array
-  const distractorWords = useMemo(() => {
-    if (!words || words.length === 0) return [];
+  const [scrambled] = useState(() => {
     const sentenceWords = new Set(targetWords);
-    const candidates = words
+    const candidates = (words ?? [])
       .map((w) => stripPunctuation ? stripPunctuation(w.targetWord) : w.targetWord)
       .filter((w) => !sentenceWords.has(w));
     const shuffled = [...candidates];
@@ -33,19 +62,16 @@ export default function SentenceBuilder({ content, onResult, onNext, words, stri
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     // Add up to 3 distractor words
-    return shuffled.slice(0, Math.min(3, shuffled.length));
-  }, [words, targetWords, stripPunctuation]);
-
-  const scrambled = useMemo(() => {
+    const distractorWords = shuffled.slice(0, Math.min(3, shuffled.length));
     // Combine correct words with distractors, then shuffle
     const allWords = [...targetWords, ...distractorWords];
-    const shuffled = [...allWords];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    const scrambledWords = [...allWords];
+    for (let i = scrambledWords.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      [scrambledWords[i], scrambledWords[j]] = [scrambledWords[j], scrambledWords[i]];
     }
-    return shuffled;
-  }, [targetWords, distractorWords]);
+    return scrambledWords;
+  });
 
   const handleSelect = useCallback(
     (index: number) => {
@@ -68,7 +94,7 @@ export default function SentenceBuilder({ content, onResult, onNext, words, stri
     setAttempts((prev) => prev + 1);
 
     const selectedWords = selectedIndices.map((idx) => scrambled[idx]);
-    const isCorrect = selectedWords.join(' ') === targetWords.join(' ');
+    const isCorrect = isValidSentenceSelection(selectedWords, targetWords, words);
 
     if (isCorrect) {
       setFeedback('correct');
@@ -87,7 +113,7 @@ export default function SentenceBuilder({ content, onResult, onNext, words, stri
         timestamp: new Date().toISOString(),
       });
     }
-  }, [feedback, selectedIndices, sentence.targetSentence, content.id, onResult, attempts]);
+  }, [feedback, attempts, selectedIndices, scrambled, targetWords, words, content.id, onResult]);
 
   const handleReset = useCallback(() => {
     setSelectedIndices([]);

@@ -28,7 +28,7 @@ export interface Sentence {
 
 export interface Exercise {
   id: string;
-  type: 'flashcard' | 'sentenceBuilder' | 'matching' | 'fillBlank';
+  type: 'flashcard' | 'sentenceBuilder' | 'matching' | 'fillBlank' | 'articleSelection' | 'reverseFlashcard';
   contentId: string;
   instructions: string;
 }

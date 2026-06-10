@@ -15,7 +15,7 @@ export default function ExerciseLibrary() {
       <h2 style={styles.title}>Practice Mode</h2>
 
       <div style={styles.filters}>
-        {['all', 'flashcard', 'sentenceBuilder', 'matching', 'fillBlank'].map((type) => (
+        {['all', 'flashcard', 'sentenceBuilder', 'matching', 'fillBlank', 'articleSelection', 'reverseFlashcard'].map((type) => (
           <button
             key={type}
             style={{

@@ -15,6 +15,7 @@ interface MatchingProps {
 export default function Matching({ content, onResult, onNext, words, allowRetry = true, maxPairs = 5 }: MatchingProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [matchedPairs, setMatchedPairs] = useState<Set<string>>(new Set());
+  const [selectedPairs, setSelectedPairs] = useState<Array<{ leftId: string; rightId: string; correct: boolean }>>([]);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [attempts, setAttempts] = useState(0);
 
@@ -39,7 +40,17 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
   // Build pairs: the passed content is always included (anchor), fill rest from words
   // Cap total pairs to maxPairs (default 5) to avoid overwhelming the user
   const pairs = useMemo(() => {
-    const otherWords = words ? words.filter((w) => w.id !== anchorWord.id) : [];
+    // Filter distractors by gender if the anchor word has one
+    const otherWords = words
+      ? words.filter((w) => {
+          if (w.id === anchorWord.id) return false;
+          // If anchor has a gender, only include words with matching gender
+          if (anchorWord.gender) {
+            return w.gender === anchorWord.gender;
+          }
+          return true;
+        })
+      : [];
     const shuffled = [...otherWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -77,9 +88,62 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
     return { leftItems: left, rightItems: right };
   }, [pairs]);
 
+  const tentativeMatchedIds = useMemo(() => {
+    return new Set(selectedPairs.flatMap((pair) => [pair.leftId, pair.rightId]));
+  }, [selectedPairs]);
+  const displayedMatchedIds = allowRetry ? matchedPairs : tentativeMatchedIds;
+
   const handleSelect = useCallback(
     (itemId: string) => {
       if (feedback) return;
+
+      if (!allowRetry) {
+        const allItems = [...leftItems, ...rightItems];
+        const currentItem = allItems.find((i) => i.id === itemId);
+        const selectedPair = selectedPairs.find((pair) => pair.leftId === itemId || pair.rightId === itemId);
+
+        if (!selected) {
+          if (selectedPair) {
+            setSelectedPairs((prev) =>
+              prev.filter((pair) => pair.leftId !== selectedPair.leftId && pair.rightId !== selectedPair.rightId)
+            );
+            return;
+          }
+          setSelected(itemId);
+          return;
+        }
+
+        if (selected === itemId) {
+          setSelected(null);
+          return;
+        }
+
+        const selectedItem = allItems.find((i) => i.id === selected);
+        if (!selectedItem || !currentItem) return;
+
+        const selectedIsLeft = selectedItem.id.endsWith('-l');
+        const currentIsLeft = currentItem.id.endsWith('-l');
+
+        if (selectedIsLeft === currentIsLeft) {
+          setSelected(itemId);
+          return;
+        }
+
+        const leftId = selectedIsLeft ? selectedItem.id : currentItem.id;
+        const rightId = selectedIsLeft ? currentItem.id : selectedItem.id;
+        const correct = selectedItem.pairId === currentItem.pairId;
+
+        setAttempts((prev) => prev + 1);
+        setSelectedPairs((prev) => {
+          const withoutConflicts = prev.filter(
+            (pair) => pair.leftId !== leftId && pair.rightId !== rightId
+          );
+          return [...withoutConflicts, { leftId, rightId, correct }];
+        });
+        setSelected(null);
+        return;
+      }
+
       if (matchedPairs.has(itemId)) return;
 
       if (!selected) {
@@ -100,7 +164,8 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
 
       const isMatch = selectedItem.pairId === currentItem.pairId;
 
-      setAttempts((prev) => prev + 1);
+      const nextAttempts = attempts + 1;
+      setAttempts(nextAttempts);
 
       if (isMatch) {
         setMatchedPairs((prev) => new Set([...prev, selected, itemId]));
@@ -115,25 +180,31 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
         }
       }
     },
-    [selected, matchedPairs, leftItems, rightItems, feedback]
+    [selected, matchedPairs, selectedPairs, leftItems, rightItems, feedback, attempts, allowRetry]
   );
 
-  const allMatched = matchedPairs.size === leftItems.length * 2;
+  const allMatched = allowRetry
+    ? matchedPairs.size === leftItems.length * 2
+    : selectedPairs.length === pairs.length;
 
   const handleCheck = useCallback(() => {
     if (!allMatched) return;
-    setFeedback('correct');
+    const correct = selectedPairs.length > 0
+      ? selectedPairs.every((pair) => pair.correct)
+      : true;
+    setFeedback(correct ? 'correct' : 'incorrect');
     onResult({
       exerciseId: content.id,
-      correct: true,
+      correct,
       attempts: attempts + 1,
       timestamp: new Date().toISOString(),
     });
-  }, [allMatched, content.id, onResult, attempts]);
+  }, [allMatched, selectedPairs, content.id, onResult, attempts]);
 
   const handleRetry = useCallback(() => {
     setSelected(null);
     setMatchedPairs(new Set());
+    setSelectedPairs([]);
     setFeedback(null);
     setAttempts(0);
   }, []);
@@ -149,11 +220,11 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
             style={{
               ...styles.item,
               ...(selected === item.id ? styles.itemSelected : {}),
-              ...(matchedPairs.has(item.id) ? styles.itemMatched : {}),
+              ...(displayedMatchedIds.has(item.id) ? styles.itemMatched : {}),
               ...(feedback === 'incorrect' && selected === item.id ? styles.itemWrong : {}),
             }}
             onClick={() => handleSelect(item.id)}
-            disabled={matchedPairs.has(item.id) || !!feedback}
+            disabled={(allowRetry && matchedPairs.has(item.id)) || !!feedback}
           >
             {item.text}
           </button>
@@ -164,11 +235,11 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
             style={{
               ...styles.item,
               ...(selected === item.id ? styles.itemSelected : {}),
-              ...(matchedPairs.has(item.id) ? styles.itemMatched : {}),
+              ...(displayedMatchedIds.has(item.id) ? styles.itemMatched : {}),
               ...(feedback === 'incorrect' && selected === item.id ? styles.itemWrong : {}),
             }}
             onClick={() => handleSelect(item.id)}
-            disabled={matchedPairs.has(item.id) || !!feedback}
+            disabled={(allowRetry && matchedPairs.has(item.id)) || !!feedback}
           >
             {item.text}
           </button>
@@ -178,7 +249,7 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
       {!feedback ? (
         <div>
           <div style={styles.progress}>
-            {matchedPairs.size / 2} / {pairs.length} pairs matched
+            {displayedMatchedIds.size / 2} / {pairs.length} pairs matched
           </div>
           <button
             style={{ ...styles.button, opacity: allMatched ? 1 : 0.5 }}
@@ -195,7 +266,7 @@ export default function Matching({ content, onResult, onNext, words, allowRetry 
               <span style={styles.correct}>✓ All matched!</span>
               <div style={styles.pairList}>
                 {leftItems
-                  .filter((item) => matchedPairs.has(item.id))
+                  .filter((item) => displayedMatchedIds.has(item.id))
                   .map((leftItem) => {
                     const rightItem = rightItems.find((r) => r.pairId === leftItem.pairId);
                     return rightItem ? (

@@ -4,7 +4,8 @@ import { useProgress } from '@/contexts/ProgressContext';
 import { useContent } from '@/contexts/ContentContext';
 import { generateDailyChallenge } from '@/engine/dailyChallengeEngine';
 import { renderExercise } from '@/engine/exerciseRegistry';
-import { generateEmojiGrid, parseEmojiGrid } from '@/utils/shareGenerator';
+import { generateEmojiGridFromResults, parseEmojiGrid } from '@/utils/shareGenerator';
+import { getLocalDateString } from '@/stores/progressStore';
 import type { DailyChallenge, ExerciseResult, Word, Sentence } from '@/types';
 
 export default function DailyChallenge() {
@@ -25,26 +26,29 @@ export default function DailyChallenge() {
     return map;
   }, [words, sentences]);
 
-  // Load challenge on mount
+  // Initialize the challenge for the current date. Once a user starts a daily
+  // challenge, keep that question list stable across provider refreshes.
   useEffect(() => {
     if (!loaded) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
+    if (challenge?.date === today) return;
+
     const existingResult = dailyChallenges.find((d) => d.date === today);
 
     if (existingResult) {
+      const completedChallenge = generateDailyChallenge(words, sentences, exercises, today);
       // Reconstruct results from the stored emoji grid
       const isCorrect = parseEmojiGrid(existingResult.emojiGrid);
       const reconstructedResults: ExerciseResult[] = isCorrect.map((correct, i) => ({
-        exerciseId: challenge?.questions[i]?.contentId || `q${i}`,
+        exerciseId: completedChallenge.questions[i]?.contentId || `q${i}`,
         timestamp: new Date().toISOString(),
         correct,
         attempts: 1,
       }));
 
       setChallenge({
-        date: today,
-        questions: [],
+        ...completedChallenge,
         emojiGrid: existingResult.emojiGrid,
         completed: true,
       });
@@ -55,36 +59,17 @@ export default function DailyChallenge() {
       const newChallenge = generateDailyChallenge(words, sentences, exercises, today);
       setChallenge(newChallenge);
     }
-  }, [loaded, dailyChallenges, words, sentences, exercises]);
+  }, [loaded, challenge?.date, dailyChallenges, words, sentences, exercises]);
 
   const handleResult = useCallback(
     (result: ExerciseResult) => {
-      const newResults = [...results, result];
-      setResults(newResults);
-
-      if (!challenge) return;
-
-      if (currentQuestion < challenge.questions.length - 1) {
-        // Advance to next question
-        setCurrentQuestion((prev) => prev + 1);
-      } else {
-        // Challenge complete
-        const correct = newResults.filter((r) => r.correct).length;
-        const total = newResults.length;
-        const today = new Date().toISOString().split('T')[0];
-        const grid = generateEmojiGrid({ date: today, correct, total, emojiGrid: '' });
-
-        setEmojiGrid(grid);
-        setCompleted(true);
-
-        addDailyChallengeResult({
-          correct,
-          total,
-          emojiGrid: grid,
-        });
-      }
+      setResults((prev) => {
+        const next = [...prev];
+        next[currentQuestion] = result;
+        return next;
+      });
     },
-    [results, challenge, currentQuestion, addDailyChallengeResult]
+    [currentQuestion]
   );
 
   const handleNext = useCallback(() => {
@@ -92,8 +77,23 @@ export default function DailyChallenge() {
 
     if (currentQuestion < challenge.questions.length - 1) {
       setCurrentQuestion((prev) => prev + 1);
+      return;
     }
-  }, [challenge, currentQuestion]);
+
+    const orderedResults = results.map((result) => result.correct);
+    const correct = orderedResults.filter(Boolean).length;
+    const total = results.length;
+    const grid = generateEmojiGridFromResults(orderedResults);
+
+    setEmojiGrid(grid);
+    setCompleted(true);
+
+    addDailyChallengeResult({
+      correct,
+      total,
+      emojiGrid: grid,
+    });
+  }, [challenge, currentQuestion, results, addDailyChallengeResult]);
 
   const handleCopy = useCallback(async () => {
     const text = `🇩🇪 Daily Challenge: ${emojiGrid}`;
@@ -204,7 +204,7 @@ export default function DailyChallenge() {
         Question {currentQuestion + 1} of {challenge.questions.length}
       </div>
 
-      <div key={content.id}>
+      <div key={`${currentQuestion}-${currentQ.exerciseType}-${content.id}`}>
         {renderExercise(
           currentQ.exerciseType,
           content,

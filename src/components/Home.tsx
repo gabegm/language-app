@@ -1,21 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useProgress } from '@/contexts/ProgressContext';
 import { useContent } from '@/contexts/ContentContext';
 import StreakDisplay from '@/components/StreakDisplay';
+import { getLocalDateString } from '@/stores/progressStore';
 
 export default function Home() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { streak, dailyChallenges } = useProgress();
   const { loaded } = useContent();
-  const [hasChallenge, setHasChallenge] = useState(false);
-
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+  const hasChallenge = useMemo(() => {
+    const today = getLocalDateString();
     const todayResult = dailyChallenges.find((d) => d.date === today);
-    setHasChallenge(!!todayResult);
+    return !!todayResult;
   }, [dailyChallenges]);
 
   return (

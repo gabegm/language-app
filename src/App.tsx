@@ -52,7 +52,7 @@ function AppRoutes() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/language-app/">
       <ErrorBoundary>
         <LanguageProvider>
           <AppRoutes />

@@ -22,6 +22,14 @@ const mockExercises: Exercise[] = [
   { id: 'e4', type: 'fillBlank', contentId: 'w3', instructions: 'Fill in the blank' },
 ];
 
+const manyWords: Word[] = Array.from({ length: 14 }, (_, i) => ({
+  id: `w${i + 1}`,
+  targetWord: `Wort${i + 1}`,
+  translation: `word${i + 1}`,
+  difficulty: 1,
+  tags: [],
+}));
+
 describe('generateDailyChallenge', () => {
   it('generates a deterministic challenge for the same date', () => {
     const challenge1 = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-06-08');
@@ -33,18 +41,21 @@ describe('generateDailyChallenge', () => {
   });
 
   it('generates different challenges for different dates', () => {
-    const challenge1 = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-06-08');
-    const challenge2 = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-06-09');
+    const challenge1 = generateDailyChallenge(manyWords, [], [], '2026-06-08');
+    const challenge2 = generateDailyChallenge(manyWords, [], [], '2026-06-09');
 
-    const ids1 = challenge1.questions.map((q) => q.contentId).sort().join(',');
-    const ids2 = challenge2.questions.map((q) => q.contentId).sort().join(',');
+    const ids1 = challenge1.questions.map((q) => q.contentId).join(',');
+    const ids2 = challenge2.questions.map((q) => q.contentId).join(',');
     expect(ids1).not.toBe(ids2);
   });
 
-  it('generates 4-6 questions based on day of year', () => {
+  it('generates 8-10 questions based on day of year', () => {
     const challenge = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-06-08');
-    expect(challenge.questions.length).toBeGreaterThanOrEqual(4);
-    expect(challenge.questions.length).toBeLessThanOrEqual(6);
+    const largerChallenge = generateDailyChallenge(manyWords, [], [], '2026-06-08');
+
+    expect(challenge.questions.length).toBeLessThanOrEqual(mockWords.length + mockSentences.length);
+    expect(largerChallenge.questions.length).toBeGreaterThanOrEqual(8);
+    expect(largerChallenge.questions.length).toBeLessThanOrEqual(10);
   });
 
   it('includes both words and sentences in the challenge', () => {
@@ -91,18 +102,49 @@ describe('generateDailyChallenge', () => {
       expect(q).toHaveProperty('contentId');
       expect(typeof q.contentId).toBe('string');
       if (q.exerciseType !== undefined) {
-        expect(['flashcard', 'sentenceBuilder', 'matching', 'fillBlank']).toContain(q.exerciseType);
+        expect(['flashcard', 'sentenceBuilder', 'matching', 'fillBlank', 'articleSelection', 'reverseFlashcard']).toContain(q.exerciseType);
+      }
+    }
+  });
+
+  it('only assigns exercise types that match the selected content shape', () => {
+    const wordsWithoutExercises: Word[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `word-${i + 1}`,
+      targetWord: `Wort${i + 1}`,
+      translation: `word${i + 1}`,
+      difficulty: 1,
+      tags: [],
+    }));
+    const sentencesWithoutExercises: Sentence[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `sentence-${i + 1}`,
+      targetSentence: `Satz ${i + 1} ist kurz`,
+      translation: `Sentence ${i + 1} is short`,
+      difficulty: 1,
+      wordIds: [],
+    }));
+    const wordTypes = ['flashcard', 'matching', 'articleSelection', 'reverseFlashcard'];
+    const sentenceTypes = ['sentenceBuilder', 'fillBlank'];
+
+    for (const date of ['2026-06-08', '2026-06-09', '2026-06-10', '2026-06-11']) {
+      const challenge = generateDailyChallenge(wordsWithoutExercises, sentencesWithoutExercises, [], date);
+
+      for (const question of challenge.questions) {
+        if (question.contentId.startsWith('word-')) {
+          expect(wordTypes).toContain(question.exerciseType);
+        } else {
+          expect(sentenceTypes).toContain(question.exerciseType);
+        }
       }
     }
   });
 
   it('different date permutations produce different challenges (no seed collisions)', () => {
-    const challenge1 = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-06-08');
-    const challenge2 = generateDailyChallenge(mockWords, mockSentences, mockExercises, '2026-08-06');
+    const challenge1 = generateDailyChallenge(manyWords, [], [], '2026-06-08');
+    const challenge2 = generateDailyChallenge(manyWords, [], [], '2026-08-06');
     // These dates had the same seed with the old dateToSeed (2026+6+8 = 2026+8+6)
     // With the new hash, they must produce different challenges
-    const ids1 = challenge1.questions.map((q) => q.contentId).sort().join(',');
-    const ids2 = challenge2.questions.map((q) => q.contentId).sort().join(',');
+    const ids1 = challenge1.questions.map((q) => q.contentId).join(',');
+    const ids2 = challenge2.questions.map((q) => q.contentId).join(',');
     expect(ids1).not.toBe(ids2);
   });
 });
