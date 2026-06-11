@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { copyToClipboard } from '@/utils/shareGenerator';
 
+const APP_URL = 'https://gabegm.github.io/language-app/';
+
 interface ShareButtonProps {
   emojiGrid: string;
 }
@@ -9,7 +11,7 @@ export default function ShareButton({ emojiGrid }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    const text = `🇩🇪 Daily Challenge: ${emojiGrid}`;
+    const text = `🇩🇪 Daily Challenge: ${emojiGrid}\n\nPlay the daily challenge: ${APP_URL}`;
     const success = await copyToClipboard(text);
     if (success) {
       setCopied(true);

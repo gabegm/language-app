@@ -96,7 +96,7 @@ export default function DailyChallenge() {
   }, [challenge, currentQuestion, results, addDailyChallengeResult]);
 
   const handleCopy = useCallback(async () => {
-    const text = `🇩🇪 Daily Challenge: ${emojiGrid}`;
+    const text = `🇩🇪 Daily Challenge: ${emojiGrid}\n\nPlay the daily challenge: https://gabegm.github.io/language-app/`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
